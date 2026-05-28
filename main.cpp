@@ -11,6 +11,16 @@
 
 EVChargingManager* manager;
 
+int readMenuChoice() {
+    int choice;
+    if (!(std::cin >> choice)) {
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        return -1;
+    }
+    return choice;
+}
+
 void clearScreen() {
     #ifdef _WIN32
         system("cls");
@@ -179,6 +189,137 @@ void searchUser() {
     std::cin.get();
 }
 
+void displayUserPortalMenu() {
+    clearScreen();
+    std::cout << "------------------- User Management -------------------" << std::endl;
+    std::cout << "\n1. Add New User (Register)" << std::endl;
+    std::cout << "2. Remove User" << std::endl;
+    std::cout << "3. List All Users" << std::endl;
+    std::cout << "4. Search User by ID" << std::endl;
+    std::cout << "5. View User Details" << std::endl;
+    std::cout << "6. Back to Admin Menu" << std::endl;
+    std::cout << "\nEnter your choice: ";
+}
+
+void bookStationForUser() {
+    clearScreen();
+    std::string userId, stationId;
+    int duration;
+
+    std::cout << "Enter User ID: ";
+    std::cin >> userId;
+    User* user = manager->findUserByID(userId);
+    if (!user) {
+        std::cout << "User not found." << std::endl;
+        std::cout << "Press Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
+        return;
+    }
+
+    std::cout << "Enter Station ID: ";
+    std::cin >> stationId;
+    Station* station = manager->findStationByID(stationId);
+    if (!station) {
+        std::cout << "Station not found." << std::endl;
+        std::cout << "Press Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
+        return;
+    }
+
+    std::cout << "Enter duration in minutes: ";
+    std::cin >> duration;
+    std::string bookingId = "B" + userId + stationId;
+    Booking* booking = new Booking(bookingId, station, user, duration);
+    booking->startSession();
+    manager->addBooking(booking);
+
+    std::cout << "Booking created successfully with ID " << bookingId << "." << std::endl;
+    std::cout << "Press Enter to continue...";
+    std::cin.ignore();
+    std::cin.get();
+}
+
+void viewMyBookings() {
+    clearScreen();
+    std::string userId;
+    std::cout << "Enter User ID: ";
+    std::cin >> userId;
+    manager->listBookingsForUser(userId);
+    std::cout << "\nPress Enter to continue...";
+    std::cin.ignore();
+    std::cin.get();
+}
+
+void cancelBookingPortal() {
+    clearScreen();
+    std::string bookingId;
+    std::cout << "Enter Booking ID to cancel: ";
+    std::cin >> bookingId;
+    manager->cancelBooking(bookingId);
+    std::cout << "Press Enter to continue...";
+    std::cin.ignore();
+    std::cin.get();
+}
+
+void endBookingPortal() {
+    clearScreen();
+    std::string bookingId;
+    std::cout << "Enter Booking ID to complete: ";
+    std::cin >> bookingId;
+    manager->completeBooking(bookingId);
+    std::cout << "Press Enter to continue...";
+    std::cin.ignore();
+    std::cin.get();
+}
+
+void userPortal() {
+    int choice;
+    while (true) {
+        displayUserPortalMenu();
+        choice = readMenuChoice();
+
+        switch (choice) {
+            case 1:
+                registerUser();
+                break;
+            case 2: {
+                std::string id;
+                clearScreen();
+                std::cout << "Remove User - Enter user ID: ";
+                std::cin >> id;
+                manager->removeUser(id);
+                std::cout << "\nPress Enter to continue...";
+                std::cin.ignore();
+                std::cin.get();
+                break;
+            }
+            case 3:
+                listUsers();
+                break;
+            case 4:
+                searchUser();
+                break;
+            case 5: {
+                std::string id;
+                clearScreen();
+                std::cout << "View User Details - Enter user ID: ";
+                std::cin >> id;
+                manager->searchUserByID(id);
+                std::cout << "\nPress Enter to continue...";
+                std::cin.ignore();
+                std::cin.get();
+                break;
+            }
+            case 6:
+                return;
+            default:
+                std::cout << "Invalid choice!" << std::endl;
+        }
+    }
+}
+
 void stationManagement() {
     int choice;
     while (true) {
@@ -199,12 +340,21 @@ void stationManagement() {
                 std::cin.get();
                 break;
             }
-            case 3:
-                std::cout << "Update Station Status - Not yet fully implemented" << std::endl;
+            case 3: {
+                clearScreen();
+                std::string id;
+                int status;
+                std::cout << "Update Station Status" << std::endl;
+                std::cout << "Enter Station ID: ";
+                std::cin >> id;
+                std::cout << "Enter new status (0=Available, 1=Occupied, 2=Faulty, 3=Maintenance): ";
+                std::cin >> status;
+                manager->updateStationStatus(id, status);
                 std::cout << "Press Enter to continue...";
                 std::cin.ignore();
                 std::cin.get();
                 break;
+            }
             case 4:
                 listStations();
                 break;
@@ -372,7 +522,8 @@ void backupRestorePortal() {
         std::cout << "2. Restore System from Backup" << std::endl;
         std::cout << "3. Export All Stations to CSV" << std::endl;
         std::cout << "4. Export All Users to CSV" << std::endl;
-        std::cout << "5. Back to Main Menu" << std::endl;
+        std::cout << "5. Export All Bookings to CSV" << std::endl;
+        std::cout << "6. Back to Main Menu" << std::endl;
         std::cout << "\nEnter your choice: ";
         std::cin >> choice;
         
@@ -406,6 +557,13 @@ void backupRestorePortal() {
                 std::cin.get();
                 break;
             case 5:
+                clearScreen();
+                manager->exportBookingsToCSV("data/bookings.csv");
+                std::cout << "\nPress Enter to continue...";
+                std::cin.ignore();
+                std::cin.get();
+                break;
+            case 6:
                 return;
             default:
                 std::cout << "Invalid choice!" << std::endl;
@@ -415,31 +573,19 @@ void backupRestorePortal() {
 
 int main() {
     manager = new EVChargingManager();
-    
-    // Load sample data
-    manager->addStation(new ACStation("ST001", "Anna Nagar", 13.0843, 80.2102, 7.2, 4));
-    manager->addStation(new DCFastStation("ST002", "Guindy", 13.0067, 80.2206, 25.0, 2));
-    manager->addStation(new DCUltraFastStation("ST003", "OMR", 12.9220, 80.1500, 60.0, 3));
-    
-    manager->addUser(new RegularUser("U001", "Ramesh Kumar", "9876543210"));
-    manager->addUser(new PremiumUser("U002", "Priya Sharma", "9123456789"));
-    manager->addUser(new FleetUser("U003", "Suresh Reddy", "9988776655", "FLT001", "LogisticsCorp"));
-    
+    manager->loadAllData();
+
     int choice;
     while (true) {
         displayMainMenu();
-        std::cin >> choice;
+        choice = readMenuChoice();
         
         switch (choice) {
             case 1:
                 adminPortal();
                 break;
             case 2:
-                clearScreen();
-                std::cout << "User Portal - Coming Soon!" << std::endl;
-                std::cout << "Press Enter to continue...";
-                std::cin.ignore();
-                std::cin.get();
+                userPortal();
                 break;
             case 3:
                 analyticsPortal();
